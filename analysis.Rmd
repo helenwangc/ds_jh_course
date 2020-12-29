@@ -1,0 +1,131 @@
+---
+title: "Classification of Quality of Sports Actvity"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+## Introduction
+In this project, data collected from motion sensors worn by 6 participants performing weight lifting exercises have been used to build a model to assess the quality of this particular activity. In the experiment, the participants executed the exercise with 'good' quality or with common mistakes, classified to total of five types . This qualitative label is provided in a data set together with over a hundred of features either directly from the sensors or derived from the raw readings, by Velloso, E. etc. (1). In order to simplify the model, the 'training' data downloaded from the course's website is pre-processed to exclude columns with metadata and columns with the majority of entries being NA or missing. Considering the complexity of available features and computational requirements, a classification model is fit using a Random Forest approach with the method of 5-fold Cross-Validation. The resulting model has a high accuracy in predicting the types of activity in both training and testing data, meaning the model works well under this particular context.
+
+
+
+## Load necessary libraries 
+```{r loadLib}
+library(caret)
+library(parallel)
+library(doParallel)
+```
+
+
+
+## Parallel processing setting
+Because of the computational intensiveness involved in the random forest approach for a large data set, a parallel processing is set up to speed up the calculation following instructions by Len Gresk (2).
+
+```{r setParallel}
+cluster <- makeCluster(detectCores() - 1) 
+registerDoParallel(cluster)
+```
+
+
+
+## Reading of training and testing data
+
+```{r readData}
+#urla <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+#urlb <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+
+#download.file(urla, 'pml-training.csv')
+#download.file(urlb, 'pml-testing.csv')
+
+training <- read.csv('pml-training.csv')
+testing <- read.csv('pml-testing.csv')
+
+#number of rows and columns in the training and testing data
+dim(training)
+dim(testing)
+
+training$classe <- as.factor(training$classe)
+```
+
+
+
+## Data exploration and pre-processing
+First, a visual scan of the training data by command fix() shows the first seven columns are metadata for subject names, time stamps etc, which are irrelevant to the exercise activity. Some other columns have NA or empty string values. A count of such entries for each column reveals tens of columns with >95% NA or empty string values. To simplify model fitting, these columns are excluded.
+
+```{r preProcess, echo=TRUE}
+
+rownum <- nrow(training)
+
+#number of NA values for each column
+nacnt <- apply(training, 2, function(x)(sum(is.na(x))))
+napct <- nacnt/rownum
+
+#number of empty strings for each column
+getMiss <- function(x){
+  if (is.character(x)){
+    sum(x=='')
+  }
+}
+misscnt <- apply(training, 2, getMiss)
+misspct <- misscnt/rownum
+
+#remove columns for metadata and columns with >=95% NA or empty string values
+training3 <- training[, -c(1:7, which(napct>=0.95), which(misspct>=0.95))]
+testing3 <- testing[, -c(1:7, which(napct>=0.95), which(misspct>=0.95))]
+
+#number of rows and columns remained in the training and testing data
+dim(training3)
+dim(testing3)
+
+```
+
+
+## Classifier model using Rain Forest approach
+```{r trainModel, echo=TRUE}
+set.seed(3433)
+
+#setting specs for rain forest model
+fitControl <- trainControl(method = "cv",
+number = 5,
+allowParallel = TRUE)
+
+fit <- train(classe ~ ., method="rf", data=training3, trControl = fitControl)
+
+#some information on the fit 
+fit
+
+fit$resample
+
+#accuracy of steps during model fitting with the training data
+confusionMatrix.train(fit)
+
+#stop parallel processing
+stopCluster(cluster)
+registerDoSEQ()
+
+```
+
+
+
+## Prediction of types activity in the testing data
+```{r predictTest, echo=TRUE}
+testpd <- predict(fit, testing3[, -53])
+
+#predicted types with the testing data 
+testpd
+```
+
+
+
+## Conclusion
+The model fit with the above method appears to have a very good performance in predicting the types of activity in both training and testing data. However, as the authors performing the experiment pointed out, this model cannot be easily generalized to catch patterns of activity of good quality but with adjusted specification, not to mention all possible kinds of mistakes. The classifier itself also neglects a very important factor in any kind of exercises, the time sequence of all features, the modeling of which would require more complicated approach.  
+
+
+## References
+1. Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+2. Len Gresk, https://github.com/lgreski/datasciencectacontent/blob/master/markdown/pml-randomForestPerformance.md
+
+
