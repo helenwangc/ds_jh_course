@@ -1,0 +1,21 @@
+---
+title: "Map of United States (02/17/2021)"
+output: html_document
+Date: 02/17/2021
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, error = FALSE)
+library(maps)
+library(leaflet)
+```
+
+
+```{r maps, include=TRUE}
+mapStates = map("state", fill = TRUE, plot = FALSE)
+leaflet(data = mapStates) %>%
+  addTiles() %>%
+  addPolygons(fillColor = topo.colors(5, alpha = NULL), stroke = FALSE) 
+
+```
+
